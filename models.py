@@ -1,74 +1,201 @@
-from database import Database
+import mysql.connector
 
-class Auth:
-    def __init__(self):
-        self.db = Database()
-        if not self.db.connect():
-            print("❌ Auth: Hindi makakonekta sa DB")
-
-    def login(self, username, password):
-        conn = self.db.get_connection()
-        if not conn:
-            return None
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT user_id, username, role, full_name FROM users WHERE username=%s AND password=%s", 
-                         (username, password))
-            row = cursor.fetchone()
-            cursor.close()
-            if row:
-                return {"id": row[0], "username": row[1], "role": row[2], "name": row[3]}
-        except Exception as e:
-            print(f"❌ Login Error: {e}")
+def get_connection():
+    try:
+        return mysql.connector.connect(
+            host="127.0.0.1",
+            user="root",
+            password="",
+            database="safecampus_db"
+        )
+    except:
         return None
 
 
-class ContactManager:
-    def __init__(self):
-        self.db = Database()
-        self.db.connect()
-
-    def get_all(self):
-        conn = self.db.get_connection()
-        if not conn: return []
+class EmergencyContact:
+    @staticmethod
+    def get_all():
+        conn = get_connection()
+        if not conn:
+            return []
         try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM emergency_contacts")
-            return cursor.fetchall()
-        except Exception as e:
-            print(f"❌ Contacts Error: {e}")
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM emergency_contacts ORDER BY id")
+            result = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            return result
+        except:
             return []
 
 
-class SafetyManager:
-    def __init__(self):
-        self.db = Database()
-        self.db.connect()
-
-    def get_all(self):
-        conn = self.db.get_connection()
-        if not conn: return []
+class SafetyInfo:
+    @staticmethod
+    def get_all():
+        conn = get_connection()
+        if not conn:
+            return []
         try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM safety_info")
-            return cursor.fetchall()
-        except Exception as e:
-            print(f"❌ Safety Error: {e}")
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM safety_information ORDER BY id DESC")
+            result = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            return result
+        except:
             return []
 
 
-class IncidentManager:
-    def __init__(self):
-        self.db = Database()
-        self.db.connect()
+class EmergencyReport:
+    @staticmethod
+    def get_all():
+        conn = get_connection()
+        if not conn:
+            return []
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM emergency_reports ORDER BY id DESC")
+            result = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            return result
+        except:
+            return []
 
-    def get_all(self):
-        conn = self.db.get_connection()
-        if not conn: return []
+    @staticmethod
+    def create(report_type, location, description, reporter_name):
+        conn = get_connection()
+        if not conn:
+            return False
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM incidents ORDER BY date_reported DESC")
-            return cursor.fetchall()
-        except Exception as e:
-            print(f"❌ Incidents Error: {e}")
+            cursor.execute(
+                "INSERT INTO emergency_reports (report_type, location, description, reporter_name) VALUES (%s, %s, %s, %s)",
+                (report_type, location, description, reporter_name)
+            )
+            conn.commit()
+            return True
+        except:
+            return False
+
+    @staticmethod
+    def update_status(report_id, new_status):
+        conn = get_connection()
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE emergency_reports SET status = %s WHERE id = %s", (new_status, report_id))
+            conn.commit()
+            return True
+        except:
+            return False
+
+
+class EmergencyAlert:
+    @staticmethod
+    def get_all():
+        conn = get_connection()
+        if not conn:
             return []
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM emergency_alerts ORDER BY id DESC")
+            result = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            return result
+        except:
+            return []
+
+    @staticmethod
+    def create(title, message, alert_type):
+        conn = get_connection()
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO emergency_alerts (title, message, alert_type) VALUES (%s, %s, %s)",
+                (title, message, alert_type)
+            )
+            conn.commit()
+            return True
+        except:
+            return False
+
+    @staticmethod
+    def delete(alert_id):
+        conn = get_connection()
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM emergency_alerts WHERE id = %s", (alert_id,))
+            conn.commit()
+            return True
+        except:
+            return False
+
+
+class UserAuth:
+    @staticmethod
+    def verify(username, password):
+        conn = get_connection()
+        if not conn:
+            return None
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM users WHERE username = %s AND password = %s", (username, password))
+            user = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            return user
+        except:
+            return None
+
+
+class UserManagement:
+    @staticmethod
+    def get_all():
+        conn = get_connection()
+        if not conn:
+            return []
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT id, username, role FROM users ORDER BY id")
+            result = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            return result
+        except:
+            return []
+
+    @staticmethod
+    def add_user(username, password, role):
+        conn = get_connection()
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)",
+                (username, password, role)
+            )
+            conn.commit()
+            return True
+        except:
+            return False
+
+    @staticmethod
+    def delete_user(user_id):
+        conn = get_connection()
+        if not conn:
+            return False
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            conn.commit()
+            return True
+        except:
+            return False
