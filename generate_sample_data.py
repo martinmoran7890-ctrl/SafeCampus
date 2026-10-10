@@ -1,154 +1,166 @@
-from database import Database
 import random
-from datetime import datetime, timedelta
+from database import get_connection, initialize_database
 
-db = Database()
-if not db.connect():
-    print("❌ Hindi makakonekta sa database")
-    exit()
-conn = db.get_connection()
-cursor = conn.cursor()
+CATEGORIES_CONTACTS = ["Security", "Health", "Admin", "Emergency", "Maintenance"]
+CATEGORIES_SAFETY = ["Guidelines", "Procedures", "Locations", "Equipment"]
+INCIDENT_TYPES = ["Fire", "Accident", "Medical", "Theft", "Suspicious Activity", "Hazard"]
+ALERT_LEVELS = ["Critical", "Warning", "Info"]
 
-names = [
-    "Campus Security Main", "Gate 1 Security Post", "Gate 2 Security Post",
-    "University Health Clinic", "Office of Student Affairs", "Campus Fire Safety Unit",
-    "Local Police Station", "Disaster Risk Reduction Office", "Guidance & Counseling",
-    "Facilities Management", "IT Support Desk", "Women & Child Protection Unit",
-    "Student Council", "Health Services", "Legal Affairs Office", "Admin Building",
-    "Dormitory Management", "Library Security", "Physical Facilities", "Canteen Management"
-]
-numbers = [
-    "0917-123-4567", "0917-234-5678", "0917-345-6789", "0917-456-7890",
-    "0918-111-2222", "0918-222-3333", "0918-333-4444", "0918-444-5555",
-    "0919-555-6666", "0919-666-7777", "0919-777-8888", "0919-888-9999",
-    "0920-111-3333", "0920-222-4444", "0920-333-5555", "0920-444-6666",
-    "0921-555-7777", "0921-666-8888", "0921-777-9999", "0921-888-0000"
-]
-categories_contact = ["Security", "Medical", "Admin", "Emergency", "Support"]
+def create_tables():
+    conn = get_connection()
+    if not conn:
+        print("[ERROR] No database connection")
+        return False
+    try:
+        cur = conn.cursor()
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS emergency_contacts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                contact_number VARCHAR(50) NOT NULL,
+                category VARCHAR(100) NOT NULL,
+                description TEXT
+            )
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS safety_information (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                category VARCHAR(100) NOT NULL,
+                details TEXT NOT NULL
+            )
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS emergency_reports (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                reporter_name VARCHAR(255),
+                location VARCHAR(255) NOT NULL,
+                incident_type VARCHAR(100) NOT NULL,
+                description TEXT,
+                status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS emergency_alerts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                alert_title VARCHAR(255) NOT NULL,
+                alert_level VARCHAR(50) NOT NULL,
+                message TEXT NOT NULL,
+                posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(100) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                full_name VARCHAR(255) NOT NULL,
+                role VARCHAR(50) NOT NULL DEFAULT 'student'
+            )
+        """)
+        
+        conn.commit()
+        print("[OK] All tables created")
+        return True
+    except Exception as e:
+        print(f"[Error creating tables] {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
 
-safety_titles = [
-    "Fire Evacuation Procedure", "Earthquake Safety Protocol", "Medical Emergency Response",
-    "Campus Lockdown Guidelines", "Flood Preparedness Plan", "Typhoon Response Protocol",
-    "Power Outage Procedures", "Chemical Spill Response", "First Aid Basics",
-    "Reporting Suspicious Activity", "Building Evacuation Map", "Assembly Points",
-    "Emergency Alarm Signals", "Fire Extinguisher Usage", "Electrical Safety",
-    "Crowd Control Guidelines", "Student ID & Access Policy", "After-Hours Safety",
-    "Weather Advisory Channels", "Emergency Kit Checklist"
-]
-safety_contents = [
-    "Walk calmly to nearest exit, do not use elevators, meet at designated assembly area.",
-    "Drop, Cover, and Hold. Stay away from glass windows and heavy objects. Do not run.",
-    "Call campus clinic immediately. Provide exact location and condition of person.",
-    "Remain indoors. Lock doors. Do not open for unknown persons. Wait for all-clear signal.",
-    "Move to higher ground immediately. Follow designated evacuation routes. Do not wade in floodwaters.",
-    "Monitor official announcements. Prepare emergency supplies. Follow suspension notices.",
-    "Report to security immediately. Use flashlights, not candles. Unplug appliances.",
-    "Alert supervisor immediately. Do not touch or inhale. Follow safety data sheet instructions.",
-    "Check scene is safe. Call for help. Apply pressure to bleeding wounds. Do not move injured unnecessarily.",
-    "Note location, description, time. Report to security desk or use anonymous hotline.",
-    "Refer to posted maps inside each room and hallway. Red lines = primary exits.",
-    "Main Gym (North Field), Admin Building Parking, Engineering Field, Library Plaza.",
-    "One long blast = Evacuate. Three short blasts = Alert. Continuous = All Clear.",
-    "Pull pin, aim at base, squeeze handle, sweep side to side. Stand 6 meters away.",
-    "Do not overload outlets. Report frayed wires. Turn off before leaving room.",
-    "Follow designated flow. Do not push or run. Yield to emergency personnel.",
-    "Carry ID at all times. Present when asked. Report lost ID immediately.",
-    "Travel in groups. Use lighted paths. Know emergency numbers before leaving.",
-    "Official Facebook page, SMS alerts, campus radio, university website.",
-    "Water, flashlight, batteries, first aid kit, whistle, non-perishable food, phone charger."
-]
-categories_safety = ["Safety", "Protocol", "Guidelines", "Emergency", "Preparedness"]
+def clear_data():
+    conn = get_connection()
+    if not conn: return
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM emergency_contacts")
+        cur.execute("DELETE FROM safety_information")
+        cur.execute("DELETE FROM emergency_reports")
+        cur.execute("DELETE FROM emergency_alerts")
+        cur.execute("DELETE FROM users")
+        conn.commit()
+        print("[OK] Old data cleared")
+    except Exception as e:
+        print(f"[Clear Error] {e}")
+    finally:
+        cur.close()
+        conn.close()
 
-incident_titles = [
-    "Minor injury reported in Hall A", "Suspicious person near Gate 2",
-    "Water leak in Admin CR", "Fallen tree branch near Gym",
-    "Power outage in Engineering Bldg", "Broken light at 2nd floor hallway",
-    "Small fire in cafeteria waste bin — extinguished", "Lost student ID reported",
-    "Stray dog near Dormitory", "Smoke detected near Library AC room",
-    "Flooding at back entrance after rain", "Door lock malfunction Room 302",
-    "Medical emergency — student fainted at canteen", "Unauthorized vehicle parked at fire lane",
-    "Flickering lights — 3rd floor Science", "Wet floor — no signage near stairs",
-    "Missing property — laptop in lab", "Elevator stuck with 2 persons inside",
-    "Overcrowding at cafeteria lunch", "Verbal dispute near parking area"
-]
-locations = [
-    "Main Campus — Hall A", "Gate 2 Entrance", "Admin Building — CR",
-    "Sports Complex — Gym", "Engineering Building — B Wing", "Science Building — 2nd Floor",
-    "Main Cafeteria", "Student Dormitory — North Wing", "University Library",
-    "Back Entrance Road", "Academic Building — Room 302", "Student Center — Canteen",
-    "Parking Area — East", "Science Building — 3rd Floor", "Main Stairway",
-    "Computer Lab — Room 405", "Admin Building — Elevator 2", "Cafeteria — Dining Hall",
-    "Student Parking — West", "Quadrangle Area"
-]
-statuses = ["pending", "resolved", "ongoing"]
+def insert_data():
+    conn = get_connection()
+    if not conn: return 0
+    try:
+        cur = conn.cursor()
+        
+        users = [
+            ("admin", "admin123", "System Administrator", "admin"),
+            ("staff", "staff123", "Campus Staff", "staff"),
+            ("student", "student123", "Martin Student", "student")
+        ]
+        for u in users:
+            cur.execute("INSERT INTO users (username, password, full_name, role) VALUES (%s, %s, %s, %s)", u)
+        print(f"✅ Users: {len(users)}")
+        
+        names = ["Security Desk", "Clinic", "Fire Dept", "Admin Office", "IT Support", "Maintenance", "Police", "Counseling"]
+        for i in range(80):
+            name = random.choice(names) + f" — Line {i+1}"
+            num = f"09{random.randint(100000000, 999999999)}"
+            cat = random.choice(CATEGORIES_CONTACTS)
+            desc = f"Contact {i+1} — Available during office hours and emergencies."
+            cur.execute("INSERT INTO emergency_contacts (name, contact_number, category, description) VALUES (%s, %s, %s, %s)",
+                       (name, num, cat, desc))
+        print("✅ Emergency Contacts: 80")
+        
+        titles = ["Fire Exit Routes", "First Aid Locations", "Assembly Points", "Emergency Numbers", "Evacuation Plan", "Safety Equipment"]
+        for i in range(60):
+            title = f"{random.choice(titles)} — Guide {i+1}"
+            cat = random.choice(CATEGORIES_SAFETY)
+            details = f"Important safety information #{i+1}: Follow all posted signs and instructions from authorized personnel immediately during emergencies. Stay calm and assist others."
+            cur.execute("INSERT INTO safety_information (title, category, details) VALUES (%s, %s, %s)",
+                       (title, cat, details))
+        print("✅ Safety Information: 60")
+        
+        locations = ["Main Building", "Science Bldg", "Library", "Gymnasium", "Canteen", "Dormitory", "Parking Area", "Admin Bldg"]
+        statuses = ["Pending", "Processing", "Resolved"]
+        for i in range(80):
+            loc = random.choice(locations) + f", Room {random.randint(100, 500)}"
+            typ = random.choice(INCIDENT_TYPES)
+            desc = f"Reported incident: {typ.lower()} observed at {loc}. Please attend promptly."
+            status = random.choice(statuses)
+            reporter = random.choice(["Martin Student", "Campus Staff", "System Admin", ""])
+            cur.execute("INSERT INTO emergency_reports (reporter_name, location, incident_type, description, status) VALUES (%s, %s, %s, %s, %s)",
+                       (reporter, loc, typ, desc, status))
+        print("✅ Incident Reports: 80")
+        
+        alert_titles = ["Building Inspection", "Weather Advisory", "Scheduled Drill", "Road Closure", "System Update"]
+        for i in range(30):
+            title = f"{random.choice(alert_titles)} — Alert {i+1}"
+            level = random.choice(ALERT_LEVELS)
+            msg = f"This is a {level.lower()} alert: {title}. Please take necessary precautions and remain alert."
+            cur.execute("INSERT INTO emergency_alerts (alert_title, alert_level, message) VALUES (%s, %s, %s)",
+                       (title, level, msg))
+        print("✅ Emergency Alerts: 30")
+        
+        conn.commit()
+        return 253
+    except Exception as e:
+        print(f"[Insert Error] {e}")
+        return 0
+    finally:
+        cur.close()
+        conn.close()
 
-print("🔨 Deleting old data...")
-cursor.execute("DELETE FROM emergency_contacts")
-conn.commit()
-print("✅ Cleared contacts table")
-
-print("🔨 Inserting 50 contacts...")
-for i in range(50):
-    name = random.choice(names)
-    num = random.choice(numbers)
-    cat = random.choice(categories_contact)
-    desc = f"Contact {i+1} — Available during office hours and emergencies."
-    cursor.execute(
-        "INSERT INTO emergency_contacts (name, contact_number, category, description) VALUES (%s, %s, %s, %s)",
-        (name, num, cat, desc)
-    )
-conn.commit()
-print("✅ 50 Emergency Contacts inserted")
-
-print("🔨 Inserting 50 safety info...")
-cursor.execute("DELETE FROM safety_info")
-conn.commit()
-for i in range(50):
-    idx = i % len(safety_titles)
-    title = safety_titles[idx] + f" — Set {i+1}"
-    content = safety_contents[idx]
-    cat = random.choice(categories_safety)
-    cursor.execute(
-        "INSERT INTO safety_info (title, content, category) VALUES (%s, %s, %s)",
-        (title, content, cat)
-    )
-conn.commit()
-print("✅ 50 Safety Info inserted")
-
-print("🔨 Inserting 150 incidents...")
-cursor.execute("DELETE FROM incidents")
-conn.commit()
-start_date = datetime(2026, 8, 1)
-for i in range(150):
-    idx = i % len(incident_titles)
-    title = incident_titles[idx]
-    desc = f"Incident #{i+1} — Reported case. Status updated regularly."
-    loc = locations[idx]
-    days = random.randint(0, 18)
-    hrs = random.randint(6, 22)
-    mins = random.randint(0, 59)
-    rep_date = start_date + timedelta(days=days, hours=hrs, minutes=mins)
-    stat = random.choice(statuses)
-    cursor.execute(
-        "INSERT INTO incidents (title, description, location, date_reported, status, reported_by) VALUES (%s, %s, %s, %s, %s, %s)",
-        (title, desc, loc, rep_date, stat, 1)
-    )
-conn.commit()
-print("✅ 150 Incidents inserted")
-
-cursor.execute("SELECT COUNT(*) FROM emergency_contacts")
-cnt1 = cursor.fetchone()[0]
-cursor.execute("SELECT COUNT(*) FROM safety_info")
-cnt2 = cursor.fetchone()[0]
-cursor.execute("SELECT COUNT(*) FROM incidents")
-cnt3 = cursor.fetchone()[0]
-total = cnt1 + cnt2 + cnt3
-
-print(f"\n🎉 TAPOS NA!")
-print(f"   Contacts: {cnt1}")
-print(f"   Safety:   {cnt2}")
-print(f"   Incidents:{cnt3}")
-print(f"   KABUUHAN: {total} RECORDS")
-
-cursor.close()
-conn.close()
+if __name__ == "__main__":
+    initialize_database()
+    if not create_tables():
+        exit(1)
+    clear_data()
+    total = insert_data()
+    print(f"\n✅ TOTAL RECORDS: {total}")
